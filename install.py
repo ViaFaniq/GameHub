@@ -7,7 +7,7 @@ import shutil
 import json
 from pathlib import Path
 
-# Modern Installer for GameHub
+# Modern Installer for GameHub.
 # Uses Libadwaita for a professional graphical experience
 
 try:
