@@ -10,9 +10,7 @@
   <div id="app">
     <header id="topbar">
       <div class="brand">
-        <svg class="logo" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-          <path d="M7.6 6C5.1 6 3.1 8.1 3.1 10.6c0 .6.1 1.2.2 1.7l1.5 5c.4 1.9 2 3.2 3.9 3.2.9 0 1.7-.4 2.2-1.2l1.2-1.6h3.8l1.2 1.6c.5.8 1.3 1.2 2.2 1.2 1.9 0 3.5-1.3 3.9-3.2l1.5-5c.1-.5.2-1.1.2-1.7C20.9 8.1 18.9 6 16.4 6H7.6zm.2 3.2h1.7v1.7h1.7v1.7H9.5v1.7H7.8v-1.7H6.1V10.9h1.7V9.2zm8.2.7a1.2 1.2 0 1 1 0 2.4 1.2 1.2 0 0 1 0-2.4zm2.7 2.7a1.2 1.2 0 1 1 0 2.4 1.2 1.2 0 0 1 0-2.4z"/>
-        </svg>
+        <img class="logo" src="logo.svg" alt="">
         <span class="brand-name">GameHub</span>
       </div>
 
@@ -117,10 +115,10 @@
         </div>
 
         <h3>Proton Management</h3>
-        <label class="row">
+        <div class="row">
           <span>Active Proton Version<small>Default runner for manual games</small></span>
-          <select id="st-proton"></select>
-        </label>
+          <div class="dropdown" id="st-proton"></div>
+        </div>
         <div class="row">
           <span>Download / Manage Proton<small>Install GE-Proton or Proton-CachyOS from GitHub</small></span>
           <button class="btn" id="st-proton-manage">Open Manager</button>
@@ -150,10 +148,10 @@
         </div>
 
         <h3>Runner Settings</h3>
-        <label class="row">
+        <div class="row">
           <span>Runner</span>
-          <select id="gm-runner"></select>
-        </label>
+          <div class="dropdown" id="gm-runner"></div>
+        </div>
         <label class="row">
           <span>DLL Overrides<small>Extra WINEDLLOVERRIDES entries, e.g. winmm=n,b</small></span>
           <input type="text" id="gm-dll" placeholder="optional" />

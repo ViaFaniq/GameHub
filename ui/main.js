@@ -36,6 +36,8 @@ const state = {
   pickedArtworkFile: null,
   deleteTarget: null,
   detailId: null,
+  protonDropdown: null,
+  runnerDropdown: null,
   loading: false,
 };
 
@@ -103,6 +105,157 @@ async function mapLimit(items, limit, worker) {
     }
   });
   await Promise.all(runners);
+}
+
+class Dropdown {
+  constructor(root) {
+    this.root = root;
+    this.options = [];
+    this.value = '';
+    this.onChange = null;
+    this.highlight = -1;
+
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'dd-btn';
+    const label = document.createElement('span');
+    label.className = 'dd-label';
+    const caret = document.createElement('span');
+    caret.className = 'dd-caret';
+    caret.innerHTML =
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m6 9 6 6 6-6"/></svg>';
+    button.appendChild(label);
+    button.appendChild(caret);
+
+    const list = document.createElement('div');
+    list.className = 'dd-list hidden';
+
+    root.appendChild(button);
+    root.appendChild(list);
+    this.button = button;
+    this.label = label;
+    this.list = list;
+
+    button.addEventListener('click', (event) => {
+      event.stopPropagation();
+      this.toggle();
+    });
+    list.addEventListener('click', (event) => event.stopPropagation());
+    document.addEventListener('click', () => this.close());
+    button.addEventListener('keydown', (event) => this.onKey(event));
+  }
+
+  setOptions(options, value) {
+    this.options = options;
+    if (typeof value === 'string') this.value = value;
+    if (!this.options.some((option) => option.value === this.value)) {
+      this.value = this.options.length ? this.options[0].value : '';
+    }
+    this.renderLabel();
+    this.renderList();
+  }
+
+  renderLabel() {
+    const selected = this.options.find((option) => option.value === this.value);
+    this.label.textContent = selected ? selected.label : '';
+  }
+
+  renderList() {
+    this.list.innerHTML = '';
+    for (const option of this.options) {
+      const item = document.createElement('button');
+      item.type = 'button';
+      item.className = 'dd-item' + (option.value === this.value ? ' selected' : '');
+      item.textContent = option.label;
+      item.addEventListener('click', () => this.select(option.value));
+      this.list.appendChild(item);
+    }
+  }
+
+  select(value) {
+    this.value = value;
+    this.renderLabel();
+    this.renderList();
+    this.close();
+    this.button.focus();
+    if (this.onChange) this.onChange(value);
+  }
+
+  getValue() {
+    return this.value;
+  }
+
+  isOpen() {
+    return !this.list.classList.contains('hidden');
+  }
+
+  toggle() {
+    if (this.isOpen()) this.close();
+    else this.open();
+  }
+
+  open() {
+    this.list.classList.remove('hidden');
+    this.root.classList.add('open');
+    this.positionList();
+    this.highlight = this.options.findIndex((option) => option.value === this.value);
+    this.refreshHighlight();
+  }
+
+  positionList() {
+    const rect = this.button.getBoundingClientRect();
+    const list = this.list;
+    list.style.position = 'fixed';
+    list.style.left = `${rect.left}px`;
+    list.style.right = 'auto';
+    list.style.width = `${rect.width}px`;
+    list.style.minWidth = '0';
+    list.style.top = `${rect.bottom + 6}px`;
+    const height = list.offsetHeight;
+    if (rect.bottom + 6 + height > window.innerHeight - 8) {
+      list.style.top = `${Math.max(8, rect.top - height - 6)}px`;
+    }
+  }
+
+  close() {
+    this.list.classList.add('hidden');
+    this.root.classList.remove('open');
+  }
+
+  refreshHighlight() {
+    Array.from(this.list.children).forEach((item, index) => {
+      item.classList.toggle('highlight', index === this.highlight);
+    });
+    const active = this.list.children[this.highlight];
+    if (active && active.scrollIntoView) active.scrollIntoView({ block: 'nearest' });
+  }
+
+  onKey(event) {
+    const count = this.options.length;
+    if (event.key === 'Escape') {
+      this.close();
+      return;
+    }
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      if (!this.isOpen()) {
+        this.open();
+      } else if (this.highlight >= 0 && this.highlight < count) {
+        this.select(this.options[this.highlight].value);
+      }
+      return;
+    }
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      const delta = event.key === 'ArrowDown' ? 1 : -1;
+      if (!this.isOpen()) {
+        this.open();
+        return;
+      }
+      this.highlight = Math.max(0, Math.min(count - 1, this.highlight + delta));
+      this.refreshHighlight();
+    }
+  }
 }
 
 function showLoading(visible) {
@@ -555,6 +708,15 @@ async function saveSetting(key, value) {
   }
 }
 
+function populateProtonDropdown() {
+  const options = [{ value: '', label: 'System Default (latest installed)' }];
+  const names = Object.keys(state.protons).sort().reverse();
+  for (const name of names) options.push({ value: state.protons[name], label: name });
+  const current = state.settings.custom_proton_path || '';
+  const value = names.some((name) => state.protons[name] === current) ? current : '';
+  state.protonDropdown.setOptions(options, value);
+}
+
 function openSettings() {
   const settings = state.settings;
   $('#st-enable-api').checked = isTrue(settings.enable_steam_api);
@@ -563,21 +725,7 @@ function openSettings() {
   $('#st-steam-key').value = settings.steam_api_key || '';
   $('#st-sgdb-key').value = settings.sgdb_api_key || '';
 
-  const select = $('#st-proton');
-  select.innerHTML = '';
-  const defaultOption = document.createElement('option');
-  defaultOption.value = '';
-  defaultOption.textContent = 'System Default (latest installed)';
-  select.appendChild(defaultOption);
-  const names = Object.keys(state.protons).sort().reverse();
-  for (const name of names) {
-    const option = document.createElement('option');
-    option.value = state.protons[name];
-    option.textContent = name;
-    select.appendChild(option);
-  }
-  const current = settings.custom_proton_path || '';
-  select.value = names.some((name) => state.protons[name] === current) ? current : '';
+  populateProtonDropdown();
   showModal('#modal-settings');
 }
 
@@ -607,25 +755,18 @@ function openGameModal(game) {
   $('#gm-path-label').textContent = state.gmPath ? basename(state.gmPath) : 'No file selected';
   $('#gm-dll').value = game && game.dll_overrides ? game.dll_overrides : '';
 
-  const runner = $('#gm-runner');
-  runner.innerHTML = '';
-  const addOption = (value, label) => {
-    const option = document.createElement('option');
-    option.value = value;
-    option.textContent = label;
-    runner.appendChild(option);
-  };
-  addOption('default', 'Global Default (from Settings)');
-  addOption('native', 'Native (Linux / No Proton)');
+  const options = [
+    { value: 'default', label: 'Global Default (from Settings)' },
+    { value: 'native', label: 'Native (Linux / No Proton)' },
+  ];
   const names = Object.keys(state.protons).sort().reverse();
-  for (const name of names) addOption(name, name);
+  for (const name of names) options.push({ value: name, label: name });
+  let runnerValue = 'default';
   if (game) {
-    if (game.runner_type === 'native') runner.value = 'native';
-    else if (game.proton_version && names.includes(game.proton_version)) runner.value = game.proton_version;
-    else runner.value = 'default';
-  } else {
-    runner.value = 'default';
+    if (game.runner_type === 'native') runnerValue = 'native';
+    else if (game.proton_version && names.includes(game.proton_version)) runnerValue = game.proton_version;
   }
+  state.runnerDropdown.setOptions(options, runnerValue);
 
   $('#gm-useglobal').checked = game ? game.use_global_args !== false : true;
   $('#gm-args').value = game && game.arguments ? game.arguments : '';
@@ -644,7 +785,7 @@ async function saveGameModal() {
     toast('Game name and executable path are required', true);
     return;
   }
-  const runner = $('#gm-runner').value;
+  const runner = state.runnerDropdown.getValue();
   const input = {
     name,
     path: state.gmPath,
@@ -912,33 +1053,20 @@ function bindBackendEvents() {
       toast(`Installed ${payload.tag}`);
       await refreshProtons();
       renderProtonList();
-      $('#st-proton') && openSettingsProtonRefresh();
+      if (!$('#modal-settings').classList.contains('hidden')) populateProtonDropdown();
     } else {
       toast(`Install failed: ${payload.error}`, true);
     }
   });
 }
 
-function openSettingsProtonRefresh() {
-  const select = $('#st-proton');
-  if (!select) return;
-  select.innerHTML = '';
-  const defaultOption = document.createElement('option');
-  defaultOption.value = '';
-  defaultOption.textContent = 'System Default (latest installed)';
-  select.appendChild(defaultOption);
-  const names = Object.keys(state.protons).sort().reverse();
-  for (const name of names) {
-    const option = document.createElement('option');
-    option.value = state.protons[name];
-    option.textContent = name;
-    select.appendChild(option);
-  }
-}
-
 /* ===== UI bindings ===== */
 
 function bindUI() {
+  state.protonDropdown = new Dropdown($('#st-proton'));
+  state.protonDropdown.onChange = (value) => saveSetting('custom_proton_path', value);
+  state.runnerDropdown = new Dropdown($('#gm-runner'));
+
   document.querySelectorAll('#tabs .tab').forEach((tab) => {
     tab.addEventListener('click', () => {
       state.tab = tab.dataset.tab;
@@ -1009,7 +1137,6 @@ function bindUI() {
   $('#st-sgdb-link').addEventListener('click', () =>
     invoke('open_external', { target: 'https://www.steamgriddb.com/profile/preferences' }).catch(() => {})
   );
-  $('#st-proton').addEventListener('change', (event) => saveSetting('custom_proton_path', event.target.value));
   $('#st-proton-manage').addEventListener('click', () => openProtonManager());
 
   /* Game modal */

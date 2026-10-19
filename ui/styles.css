@@ -464,6 +464,63 @@ html, body {
 .seg-body { padding: 12px 2px 4px; display: flex; flex-direction: column; gap: 9px; align-items: flex-start; }
 .seg-body input { width: 100%; }
 
+/* ===== Custom dropdown ===== */
+.dropdown { position: relative; width: 250px; }
+.dd-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: var(--panel2);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  color: var(--text);
+  font: inherit;
+  padding: 8px 11px;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s;
+}
+.dd-btn:hover { border-color: #33405a; }
+.dropdown.open .dd-btn { border-color: var(--accent2); }
+.dd-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dd-caret { flex: none; color: var(--muted); display: grid; place-items: center; }
+.dd-caret svg { width: 14px; height: 14px; transition: transform 0.15s; }
+.dropdown.open .dd-caret svg { transform: rotate(180deg); }
+.dd-list {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 100%;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 5px;
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.55);
+  z-index: 70;
+  max-height: 260px;
+  overflow-y: auto;
+}
+.dd-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  color: var(--text);
+  font: inherit;
+  padding: 8px 11px;
+  border-radius: 7px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dd-item:hover, .dd-item.highlight { background: var(--panel3); }
+.dd-item.selected { color: var(--accent); font-weight: 600; }
+.dd-item.selected::after { content: "\2713"; float: right; margin-left: 12px; }
+
 .tabsline { display: flex; gap: 6px; padding: 2px 18px 10px; }
 .tabbtn {
   background: none;
