@@ -1,28 +1,4 @@
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-
-# Environments
-.env
-.venv
-env/
-venv/
-ENV/
-
-# Distribution / packaging
+target/
 dist/
-build/
-*.egg-info/
-
-# User-specific
-.idea/
-.vscode/
-
-# Project specific
-*.conf
-games.json
-heroic_artwork.json
-steam_playtime.json
-heroic_playtime.json
-/home/faniq/Documents/GameHub/src/backend/verify_proton.py
+*.log
+src-tauri/gen/

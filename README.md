@@ -1,76 +1,73 @@
 # GameHub
 
-GameHub is a game launcher for Linux designed to bring your Steam, Heroic, and Windows games into one GTK-powered interface.
+A unified game launcher for Linux. It brings your Steam, Heroic (Epic / GOG) and manual
+Windows games into one clean library, with Proton management, ProtonDB ratings and
+SteamGridDB artwork.
 
-![GameHub Main Screen](main_photo.jpg)
+## Features
 
-## Key Features
-
-- **Unified Library**: Automatically scans Steam and Heroic Launcher titles (Epic,GOG).
-- **ProtonDB Integration**: View compatibility ratings (Platinum, Gold, etc.) directly in your library.
-- **Steam Web API Support**: Discover and display your uninstalled Steam games.
-- **High-Quality Artwork**: Integration with **SteamGridDB** for high-resolution covers.
-- **Manual Game Addition**: Add any Windows executable with a custom configuration dialog.
-- **Advanced Runners**: Choose between Proton-GE, Proton-CachyOS and Native execution for manual games.
-- **Launch Customization**: Specify custom launch arguments and set custom artwork.
-- **OnlineFix Support**: One-click configuration for online fixes (Steamworks Fix, etc.).
-- **Playtime Tracking**: Keeps track of your gaming sessions across all platforms.
-- **Native Experience**: Built with GTK4 and Libadwaita for a seamless Linux desktop feel.
+- **Unified library** — automatically scans Steam and Heroic (Epic, GOG) titles.
+- **Manual games** — add any Windows or native executable with a custom configuration.
+- **ProtonDB integration** — compatibility ratings (Platinum, Gold, Silver, Bronze, Borked)
+  shown right on the game cards.
+- **SteamGridDB artwork** — high-quality covers, plus local file covers and automatic
+  icon extraction from `.exe` files (via `icoutils`).
+- **Proton manager** — download and install GE-Proton and Proton-CachyOS releases from
+  GitHub without leaving the app (checksum-verified).
+- **Runners** — Proton (global default, per-game version or native execution), custom
+  launch arguments, per-game or global, and `WINEDLLOVERRIDES` support.
+- **Playtime tracking** — sessions are timed and playtime is accumulated per game. For
+  Steam games, local playtime is merged with your Steam profile playtime.
+- **Steam Web API** — optionally list your uninstalled Steam games (with download links).
 
 ## Prerequisites
 
-- Python 3.x
-- Supported Distributions: Arch Linux, Fedora, Ubuntu/Debian (or derivatives)
+- Linux with a desktop environment (X11 or Wayland)
+- Steam installed (for launching Steam titles) and/or Heroic
+- The `icoutils` package (`wrestool`, `icotool`) for `.exe` icon extraction
+- `xdg-open` for launching URIs (`steam://`, `heroic://`)
 
 ## Installation
 
-We provide an automated setup script that handles dependencies and installation for you.
+Download the standalone `gamehub` binary or the `.AppImage` from the
+[Releases](https://github.com/ViaFaniq/GameHub/releases) page:
 
-1. **Download the Repository**
-   Clone the repository to your local machine:
-   ```bash
-   git clone https://github.com/CubixGamer12/GameHub.git
-   cd GameHub
-   ```
+```bash
+chmod +x GameHub_<version>_amd64.AppImage
+./GameHub_<version>_amd64.AppImage
+```
 
-2. **Run the Setup Script**
-   Execute the setup script. It will detect your distribution, install necessary system dependencies (like GTK4 and Libadwaita), and launch the graphical installer.
-   ```bash
-   ./setup.sh
-   ```
+## Building from source
 
-3. **Follow the Installer**
-   The graphical installer will guide you through the process. It will:
-   - Install the application to `~/.local/share/gamehub`.
-   - Create a dedicated virtual environment.
-   - Add a desktop entry and icon to your application menu.
+Requirements: Rust (stable), `cargo-tauri` CLI v2.
 
-4. **Launch**
-   Once installed, you can launch **GameHub** from your application menu or run `gamehub` in your terminal.
+```bash
+cd src-tauri
+cargo tauri build --bundles appimage
+```
 
-## Updating
+Artifacts:
 
-GameHub includes a built-in update mechanism. To update to the latest version:
+- `src-tauri/target/release/gamehub`
+- `src-tauri/target/release/bundle/appimage/GameHub_<version>_amd64.AppImage`
 
-1. Open a terminal in the downloaded `GameHub` folder.
-2. Run `./setup.sh` again.
-3. If a new version is available on GitHub, the script will ask if you want to update.
-4. Press `y` to pull the latest changes and reinstall/update the application.
+## Configuration
 
-## Manual Installation (Advanced)
+All app data lives in familiar locations:
 
-If you prefer to install manually or are on an unsupported distribution:
+- `~/.config/gamehub/` — settings (`configuration.conf`), manual games (`games.json`),
+  artwork overrides and playtime caches
+- `~/.cache/gamehub/` — artwork cache, ProtonDB cache, Steam app list cache
+- `~/.local/share/gamehub/` — installed Proton versions and per-game Wine prefixes
 
-1. Install `python-gobject`, `gtk4`, `libadwaita`, and `python-pip` using your package manager.
-2. Run the installer directly:
-   ```bash
-   python3 install.py
-   ```
+## Notes
+
+- The app expects `steam` and `awww`-independent external launchers: Steam titles are
+  started through `steam://rungameid/<appid>`, Heroic titles through
+  `heroic://launch/<platform>/<id>`.
+- Playtime for Steam games is synced with the Steam Web API and always keeps the highest
+  value seen.
 
 ## License
 
-This project is licensed under the **GNU General Public License v3.0 (GPLv3)**. See the [LICENSE](LICENSE) file for the full license text.
-
-## Credits
-
-- OnlineFix logic inspired by [onlinefix-linux](https://github.com/ZzEdovec/onlinefix-linux).
+GPL-3.0 — see [LICENSE](LICENSE).
