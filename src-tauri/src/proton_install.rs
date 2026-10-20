@@ -18,6 +18,8 @@ pub struct Release {
 pub async fn available_releases(source: &str) -> Result<Vec<Release>, String> {
     let repo = match source {
         "cachyos" => "CachyOS/proton-cachyos",
+        "em" => "BananaWorks07/Proton",
+        "sarek" => "pythonlover02/Proton-Sarek",
         _ => "GloriousEggroll/proton-ge-custom",
     };
     let client = reqwest::Client::builder()
@@ -55,50 +57,8 @@ pub async fn available_releases(source: &str) -> Result<Vec<Release>, String> {
             .cloned()
             .unwrap_or_default();
 
-        let mut chosen: Option<(String, String)> = None;
-        for asset in &assets {
-            let name = asset.get("name").and_then(|n| n.as_str()).unwrap_or("");
-            if !(name.ends_with(".tar.gz") || name.ends_with(".tar.xz")) {
-                continue;
-            }
-            if name.contains("aarch64") || name.contains("arm64") {
-                continue;
-            }
-            let url = asset
-                .get("browser_download_url")
-                .and_then(|u| u.as_str())
-                .unwrap_or("")
-                .to_string();
-            let base = name
-                .rsplit_once(".tar.")
-                .map(|(b, _)| b.to_string())
-                .unwrap_or_else(|| name.to_string());
-            let is_x86 = name.contains("x86_64") || name.contains("amd64");
-            let replace = match &chosen {
-                None => true,
-                Some((_, existing_base)) => {
-                    is_x86
-                        && !(existing_base.contains("x86_64") || existing_base.contains("amd64"))
-                }
-            };
-            if replace {
-                chosen = Some((url, base));
-            }
-        }
-
-        if let Some((url, base)) = chosen {
-            let checksum_name = format!("{}.sha512sum", base);
-            let checksum_url = assets.iter().find_map(|asset| {
-                let name = asset.get("name").and_then(|n| n.as_str()).unwrap_or("");
-                if name == checksum_name {
-                    asset
-                        .get("browser_download_url")
-                        .and_then(|u| u.as_str())
-                        .map(|u| u.to_string())
-                } else {
-                    None
-                }
-            });
+        if let Some((url, base)) = pick_asset(&assets) {
+            let checksum_url = checksum_url_for(&assets, &base);
             releases.push(Release {
                 tag,
                 url,
@@ -107,6 +67,62 @@ pub async fn available_releases(source: &str) -> Result<Vec<Release>, String> {
         }
     }
     Ok(releases)
+}
+
+fn pick_asset(assets: &[serde_json::Value]) -> Option<(String, String)> {
+    let mut chosen: Option<(String, String, i32)> = None;
+    for asset in assets {
+        let name = asset.get("name").and_then(|n| n.as_str()).unwrap_or("");
+        if !(name.ends_with(".tar.gz") || name.ends_with(".tar.xz")) {
+            continue;
+        }
+        if name.contains("aarch64") || name.contains("arm64") {
+            continue;
+        }
+        let url = asset
+            .get("browser_download_url")
+            .and_then(|u| u.as_str())
+            .unwrap_or("")
+            .to_string();
+        let base = name
+            .rsplit_once(".tar.")
+            .map(|(b, _)| b.to_string())
+            .unwrap_or_else(|| name.to_string());
+        let mut score = 0;
+        if name.contains("x86_64") || name.contains("amd64") {
+            score += 2;
+        }
+        if !name.to_lowercase().contains("async") {
+            score += 1;
+        }
+        let replace = match &chosen {
+            None => true,
+            Some((_, _, existing)) => score > *existing,
+        };
+        if replace {
+            chosen = Some((url, base, score));
+        }
+    }
+    chosen.map(|(url, base, _)| (url, base))
+}
+
+fn checksum_url_for(assets: &[serde_json::Value], base: &str) -> Option<String> {
+    ["sha512sum", "sha512", "sha256sum", "sha256"]
+        .iter()
+        .find_map(|suffix| {
+            let wanted = format!("{}.{}", base, suffix);
+            assets.iter().find_map(|asset| {
+                let name = asset.get("name").and_then(|n| n.as_str()).unwrap_or("");
+                if name == wanted {
+                    asset
+                        .get("browser_download_url")
+                        .and_then(|u| u.as_str())
+                        .map(|u| u.to_string())
+                } else {
+                    None
+                }
+            })
+        })
 }
 
 fn emit_progress(app: &AppHandle, tag: &str, status: &str, downloaded: u64, total: u64) {
@@ -203,11 +219,13 @@ async fn verify_checksum(
         .next()
         .unwrap_or("")
         .to_lowercase();
-    if expected.len() != 128 || !expected.chars().all(|c| c.is_ascii_hexdigit()) {
-        return Ok(());
-    }
+    let sha256 = match expected.len() {
+        128 if expected.chars().all(|c| c.is_ascii_hexdigit()) => false,
+        64 if expected.chars().all(|c| c.is_ascii_hexdigit()) => true,
+        _ => return Ok(()),
+    };
     let file = archive.to_path_buf();
-    let actual = tauri::async_runtime::spawn_blocking(move || sha512_file(&file))
+    let actual = tauri::async_runtime::spawn_blocking(move || hash_file(&file, sha256))
         .await
         .map_err(|e| e.to_string())??;
     if actual == expected {
@@ -217,12 +235,18 @@ async fn verify_checksum(
     }
 }
 
-fn sha512_file(path: &Path) -> Result<String, String> {
-    use sha2::{Digest, Sha512};
+fn hash_file(path: &Path, sha256: bool) -> Result<String, String> {
+    use sha2::{Digest, Sha256, Sha512};
     let mut file = std::fs::File::open(path).map_err(|e| e.to_string())?;
-    let mut hasher = Sha512::new();
-    std::io::copy(&mut file, &mut hasher).map_err(|e| e.to_string())?;
-    Ok(hex::encode(hasher.finalize()))
+    if sha256 {
+        let mut hasher = Sha256::new();
+        std::io::copy(&mut file, &mut hasher).map_err(|e| e.to_string())?;
+        Ok(hex::encode(hasher.finalize()))
+    } else {
+        let mut hasher = Sha512::new();
+        std::io::copy(&mut file, &mut hasher).map_err(|e| e.to_string())?;
+        Ok(hex::encode(hasher.finalize()))
+    }
 }
 
 fn extract(archive: &Path, destination: &Path) -> Result<(), String> {
@@ -241,4 +265,50 @@ fn extract(archive: &Path, destination: &Path) -> Result<(), String> {
         tar.unpack(destination).map_err(|e| e.to_string())?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn asset(name: &str) -> serde_json::Value {
+        serde_json::json!({
+            "name": name,
+            "browser_download_url": format!("https://example.com/{}", name),
+        })
+    }
+
+    #[test]
+    fn prefers_standard_build_over_async() {
+        let assets = vec![
+            asset("Proton-Sarek10-29-async.tar.gz"),
+            asset("Proton-Sarek10-29.tar.gz"),
+        ];
+        assert_eq!(pick_asset(&assets).unwrap().1, "Proton-Sarek10-29");
+    }
+
+    #[test]
+    fn prefers_x86_64_build() {
+        let assets = vec![asset("build.tar.xz"), asset("build-x86_64.tar.xz")];
+        assert_eq!(pick_asset(&assets).unwrap().1, "build-x86_64");
+    }
+
+    #[test]
+    fn skips_arm_builds() {
+        let assets = vec![asset("build-aarch64.tar.gz")];
+        assert!(pick_asset(&assets).is_none());
+    }
+
+    #[test]
+    fn finds_sha256_checksum() {
+        let assets = vec![
+            asset("proton-EM-10.0-37-HDR.tar.xz"),
+            asset("proton-EM-10.0-37-HDR.sha256sum"),
+        ];
+        let (_, base) = pick_asset(&assets).unwrap();
+        assert_eq!(
+            checksum_url_for(&assets, &base).unwrap(),
+            "https://example.com/proton-EM-10.0-37-HDR.sha256sum"
+        );
+    }
 }
