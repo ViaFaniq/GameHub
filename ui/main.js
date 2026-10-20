@@ -576,6 +576,22 @@ async function launchNative(game) {
   }
 }
 
+async function toggleDesktopEntry(game) {
+  const enable = !game.desktop_entry;
+  try {
+    await invoke('set_desktop_entry', { game, enabled: enable });
+    game.desktop_entry = enable;
+    toast(
+      enable
+        ? `Added ${game.name} to applications menu`
+        : `Removed ${game.name} from applications menu`
+    );
+    if (state.detailId === game.id) refreshDetail();
+  } catch (error) {
+    toast(String(error), true);
+  }
+}
+
 /* ===== Detail panel ===== */
 
 function openDetail(gameId) {
@@ -655,6 +671,12 @@ function refreshDetail() {
     );
   }
   actionButton('Change Artwork', () => openArtworkModal(game));
+  if (game.installed) {
+    actionButton(
+      game.desktop_entry ? 'Remove from Applications Menu' : 'Add to Applications Menu',
+      () => toggleDesktopEntry(game)
+    );
+  }
   if (game.path) {
     actionButton('Open Game Folder', () =>
       invoke('open_folder', { path: game.path }).catch((error) => toast(String(error), true))
@@ -686,6 +708,12 @@ function openContextMenu(game, x, y) {
   };
 
   addItem('Edit Artwork', () => openArtworkModal(game));
+  if (game.installed) {
+    addItem(
+      game.desktop_entry ? 'Remove from Applications Menu' : 'Add to Applications Menu',
+      () => toggleDesktopEntry(game)
+    );
+  }
   addItem('Open Game Folder', () =>
     invoke('open_folder', { path: game.path || '' }).catch((error) => toast(String(error), true))
   );

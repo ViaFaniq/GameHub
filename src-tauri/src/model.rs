@@ -22,6 +22,7 @@ pub struct Game {
     pub dll_overrides: Option<String>,
     pub steam_id: Option<String>,
     pub artwork_source: Option<String>,
+    pub desktop_entry: bool,
 }
 
 #[derive(Serialize, Default)]

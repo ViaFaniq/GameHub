@@ -1,5 +1,6 @@
 mod artwork;
 mod config;
+mod desktop_entry;
 mod heroic;
 mod model;
 mod paths;
@@ -71,6 +72,52 @@ async fn resolve_artwork(
             Ok((path, Some(appid)))
         }
         _ => Ok((None, None)),
+    }
+}
+
+fn manual_as_game(manual: &config::ManualGame) -> Game {
+    let has_user_artwork = manual.artwork.is_some();
+    let artwork = match manual.artwork.clone() {
+        Some(path) => Some(path),
+        None => artwork::extract_exe_icon(&manual.path, &manual.id),
+    };
+    Game {
+        id: manual.id.clone(),
+        name: manual.name.clone(),
+        kind: "manual".into(),
+        installed: true,
+        artwork_source: if artwork.is_some() {
+            Some(if has_user_artwork { "user" } else { "exe" }.to_string())
+        } else {
+            None
+        },
+        artwork,
+        path: Some(manual.path.clone()),
+        playtime: manual.playtime,
+        runner_type: Some(if manual.runner_type.is_empty() {
+            "proton".into()
+        } else {
+            manual.runner_type.clone()
+        }),
+        proton_version: manual.proton_version.clone(),
+        use_global_args: Some(manual.use_global_args),
+        arguments: manual.arguments.clone(),
+        dll_overrides: manual.dll_overrides.clone(),
+        steam_id: manual.steam_id.clone(),
+        ..Default::default()
+    }
+}
+
+fn refresh_manual_entry(id: &str) {
+    if !desktop_entry::exists("manual", id) {
+        return;
+    }
+    if let Some(manual) = config::load_games()
+        .games
+        .into_iter()
+        .find(|game| game.id == id)
+    {
+        let _ = desktop_entry::create(&manual_as_game(&manual));
     }
 }
 
@@ -256,42 +303,19 @@ async fn scan_library(state: State<'_, AppState>) -> Result<LibraryPayload, Stri
         game.playtime = config::get_playtime("heroic", &game.id);
     }
 
-    let mut manual_games: Vec<Game> = Vec::new();
-    for manual in config::load_games().games {
-        let (artwork, artwork_source) = match manual.artwork.clone() {
-            Some(path) => (Some(path), Some("user".to_string())),
-            None => match artwork::extract_exe_icon(&manual.path, &manual.id) {
-                Some(icon) => (Some(icon), Some("exe".to_string())),
-                None => (None, None),
-            },
-        };
-        manual_games.push(Game {
-            id: manual.id.clone(),
-            name: manual.name.clone(),
-            kind: "manual".into(),
-            installed: true,
-            artwork,
-            artwork_source,
-            path: Some(manual.path.clone()),
-            playtime: manual.playtime,
-            runner_type: Some(if manual.runner_type.is_empty() {
-                "proton".into()
-            } else {
-                manual.runner_type.clone()
-            }),
-            proton_version: manual.proton_version.clone(),
-            use_global_args: Some(manual.use_global_args),
-            arguments: manual.arguments.clone(),
-            dll_overrides: manual.dll_overrides.clone(),
-            steam_id: manual.steam_id.clone(),
-            ..Default::default()
-        });
-    }
+    let manual_games: Vec<Game> = config::load_games()
+        .games
+        .iter()
+        .map(manual_as_game)
+        .collect();
 
     let running: Vec<String> = state.running.lock().unwrap().keys().cloned().collect();
     let mut games = steam_games;
     games.extend(manual_games);
     games.extend(heroic_games);
+    for game in games.iter_mut() {
+        game.desktop_entry = desktop_entry::exists(&game.kind, &game.id);
+    }
 
     Ok(LibraryPayload {
         games,
@@ -403,12 +427,24 @@ async fn update_manual_game(input: ManualGameInput) -> Result<(), String> {
     } else if artwork_type == "none" {
         config::set_manual_artwork(&id, None, None);
     }
+    refresh_manual_entry(&id);
     Ok(())
 }
 
 #[tauri::command]
 fn delete_manual_game(id: String) {
+    let _ = desktop_entry::remove("manual", &id);
     config::delete_manual_game(&id);
+}
+
+#[tauri::command]
+fn set_desktop_entry(game: Game, enabled: bool) -> Result<bool, String> {
+    if enabled {
+        desktop_entry::create(&game)?;
+    } else {
+        desktop_entry::remove(&game.kind, &game.id)?;
+    }
+    Ok(enabled)
 }
 
 #[tauri::command]
@@ -428,6 +464,9 @@ async fn set_artwork(
         "steam" => config::steam_meta_set(&id, artwork, steam_id),
         "heroic" => config::heroic_meta_set(&id, artwork, steam_id),
         _ => return Err("Unknown game type".to_string()),
+    }
+    if kind == "manual" {
+        refresh_manual_entry(&id);
     }
     Ok(())
 }
@@ -590,8 +629,70 @@ fn open_folder(path: String) -> Result<(), String> {
     runner::spawn_uri(&folder.to_string_lossy())
 }
 
+fn cli_launch_target() -> Option<(String, String)> {
+    let mut args = std::env::args().skip(1);
+    while let Some(arg) = args.next() {
+        if arg == "--launch-game" {
+            return match (args.next(), args.next()) {
+                (Some(kind), Some(id)) => Some((kind, id)),
+                _ => None,
+            };
+        }
+    }
+    None
+}
+
+fn launch_game_from_cli(kind: &str, id: &str) -> Result<(), String> {
+    match kind {
+        "manual" => {
+            let manual = config::load_games()
+                .games
+                .into_iter()
+                .find(|game| game.id == id)
+                .ok_or_else(|| "Game not found".to_string())?;
+            let settings = config::load_settings();
+            let mut child = runner::spawn_manual(&manual, &settings)?;
+            let started = Instant::now();
+            let _ = child.wait();
+            config::add_playtime("manual", &manual.id, started.elapsed().as_secs() as i64);
+        }
+        "steam" => {
+            runner::spawn_uri(&format!("steam://rungameid/{}", id))?;
+        }
+        "heroic" => {
+            let command = heroic::scan()
+                .into_iter()
+                .find(|game| game.id == id)
+                .and_then(|game| game.command)
+                .unwrap_or_else(|| format!("heroic://launch/legendary/{}", id));
+            runner::spawn_uri(&command)?;
+        }
+        _ => return Err(format!("Unknown game type: {}", kind)),
+    }
+    Ok(())
+}
+
+fn log_launch_error(error: &str) {
+    use std::io::Write;
+    if let Ok(mut file) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(paths::cache_dir().join("launch.log"))
+    {
+        let _ = writeln!(file, "{}", error);
+    }
+}
+
 pub fn run() {
     paths::ensure_dirs();
+    if let Some((kind, id)) = cli_launch_target() {
+        if let Err(error) = launch_game_from_cli(&kind, &id) {
+            log_launch_error(&error);
+            eprintln!("GameHub: {}", error);
+            std::process::exit(1);
+        }
+        return;
+    }
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(AppState::default())
@@ -605,6 +706,7 @@ pub fn run() {
             add_manual_game,
             update_manual_game,
             delete_manual_game,
+            set_desktop_entry,
             set_artwork,
             launch_game,
             launch_native,
