@@ -157,8 +157,7 @@ html, body {
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* ===== Card ===== */
-.card { border-radius: var(--radius); cursor: pointer; position: relative; transition: transform 0.18s ease; }
-.card:hover { transform: translateY(-4px); }
+.card { border-radius: var(--radius); cursor: pointer; position: relative; }
 
 .cover {
   position: relative;
@@ -168,8 +167,9 @@ html, body {
   background: linear-gradient(160deg, var(--panel2), var(--panel));
   border: 1px solid var(--line);
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
 }
-.card:hover .cover { box-shadow: 0 10px 26px rgba(0, 0, 0, 0.5); border-color: #33405a; }
+.card:hover .cover { transform: translateY(-4px); box-shadow: 0 10px 26px rgba(0, 0, 0, 0.5); border-color: #33405a; }
 
 .cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .cover-placeholder {
@@ -230,10 +230,11 @@ html, body {
   border-radius: 7px;
   color: #fff;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+  transform: translateZ(0);
 }
 .badge.tier { left: 8px; }
 .badge.running-badge { right: 8px; background: var(--danger); top: 8px; }
-.badge.installed-flag { right: 8px; background: rgba(10, 14, 20, 0.75); backdrop-filter: blur(4px); }
+.badge.installed-flag { right: 8px; background: rgba(10, 14, 20, 0.75); }
 
 .badge.tier.platinum { background: var(--tier-platinum); }
 .badge.tier.gold { background: var(--tier-gold); }
@@ -269,8 +270,8 @@ html, body {
 .fab.install { background: #2a5f8f; }
 .fab.install:hover { background: #35739f; }
 
-.card.uninstalled .cover img, .card.uninstalled .cover-placeholder { opacity: 0.55; filter: grayscale(0.5); }
-.card.uninstalled:hover .cover img, .card.uninstalled:hover .cover-placeholder { opacity: 1; filter: none; }
+.card.uninstalled .cover img, .card.uninstalled .cover-placeholder { opacity: 0.55; transition: opacity 0.18s ease; }
+.card.uninstalled:hover .cover img, .card.uninstalled:hover .cover-placeholder { opacity: 1; }
 
 /* ===== Detail panel ===== */
 .detail {

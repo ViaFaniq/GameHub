@@ -355,6 +355,7 @@ function buildCard(game) {
   if (art) {
     const image = document.createElement('img');
     image.loading = 'lazy';
+    image.decoding = 'async';
     image.alt = game.name;
     image.src = art;
     image.addEventListener('error', () => {
