@@ -16,11 +16,11 @@ pub struct Release {
 }
 
 pub async fn available_releases(source: &str) -> Result<Vec<Release>, String> {
-    let repo = match source {
-        "cachyos" => "CachyOS/proton-cachyos",
-        "em" => "BananaWorks07/Proton",
-        "sarek" => "pythonlover02/Proton-Sarek",
-        _ => "GloriousEggroll/proton-ge-custom",
+    let releases_url = match source {
+        "cachyos" => "https://api.github.com/repos/CachyOS/proton-cachyos/releases?per_page=30",
+        "em" => "https://api.github.com/repos/BananaWorks07/Proton/releases?per_page=30",
+        "dw" => "https://dawn.wine/api/v1/repos/dawn-winery/dwproton/releases?limit=30",
+        _ => "https://api.github.com/repos/GloriousEggroll/proton-ge-custom/releases?per_page=30",
     };
     let client = reqwest::Client::builder()
         .user_agent("GameHub")
@@ -28,16 +28,13 @@ pub async fn available_releases(source: &str) -> Result<Vec<Release>, String> {
         .build()
         .map_err(|e| e.to_string())?;
     let response = client
-        .get(format!(
-            "https://api.github.com/repos/{}/releases?per_page=30",
-            repo
-        ))
+        .get(releases_url)
         .header("Accept", "application/vnd.github+json")
         .send()
         .await
         .map_err(|e| e.to_string())?;
     if !response.status().is_success() {
-        return Err(format!("GitHub API error {}", response.status()));
+        return Err(format!("Release API error {}", response.status()));
     }
     let data: serde_json::Value = response.json().await.map_err(|e| e.to_string())?;
 

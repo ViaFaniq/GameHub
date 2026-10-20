@@ -13,7 +13,7 @@ SteamGridDB artwork.
 - **SteamGridDB artwork** — high-quality covers, plus local file covers and automatic
   icon extraction from `.exe` files (via `icoutils`).
 - **Proton manager** — download and install GE-Proton, Proton-CachyOS, Proton-EM and
-  Proton-Sarek releases from GitHub without leaving the app (checksum-verified).
+  DWProton releases without leaving the app (checksum-verified).
 - **Runners** — Proton (global default, per-game version or native execution), custom
   launch arguments, per-game or global, and `WINEDLLOVERRIDES` support.
 - **Playtime tracking** — sessions are timed and playtime is accumulated per game. For
