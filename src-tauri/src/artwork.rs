@@ -72,7 +72,7 @@ pub async fn download_steam_artwork(appid: &str, game_id: &str) -> Option<String
         return None;
     }
     let bytes = response.bytes().await.ok()?;
-    let dest = paths::art_cache_dir().join(format!("{}.jpg", game_id));
+    let dest = paths::art_cache_dir().join(format!("{}_steam_{}.jpg", game_id, std::process::id()));
     std::fs::create_dir_all(paths::art_cache_dir()).ok()?;
     std::fs::write(&dest, &bytes).ok()?;
     Some(dest.to_string_lossy().to_string())
@@ -145,50 +145,32 @@ pub fn extract_exe_icon(exe_path: &str, game_id: &str) -> Option<String> {
 }
 
 pub async fn search_steam_appid(game_name: &str) -> Option<String> {
-    let cache_file = paths::art_cache_dir().join("steam_applist.json");
-    let fresh = std::fs::metadata(&cache_file)
-        .ok()
-        .and_then(|m| m.modified().ok())
-        .and_then(|t| t.elapsed().ok())
-        .map(|age| age.as_secs() < 7 * 24 * 3600)
-        .unwrap_or(false);
-
-    if !fresh {
-        let client = reqwest::Client::builder()
-            .user_agent("GameHub")
-            .timeout(std::time::Duration::from_secs(60))
-            .build()
-            .ok()?;
-        let response = client
-            .get("https://api.steampowered.com/ISteamApps/GetAppList/v2/")
-            .send()
-            .await
-            .ok()?;
-        if !response.status().is_success() {
-            return None;
-        }
-        let text = response.text().await.ok()?;
-        std::fs::create_dir_all(paths::art_cache_dir()).ok()?;
-        let _ = std::fs::write(&cache_file, text);
-    }
-
-    let text = std::fs::read_to_string(&cache_file).ok()?;
-    let data: serde_json::Value = serde_json::from_str(&text).ok()?;
-    let apps = data.get("applist")?.get("apps")?.as_array()?;
-    let term = game_name.to_lowercase().trim().to_string();
+    let term = game_name.trim();
     if term.is_empty() {
         return None;
     }
-    for app in apps {
-        let name = app.get("name").and_then(|n| n.as_str()).unwrap_or("");
-        if name.to_lowercase() == term {
-            return app.get("appid").map(|id| id.to_string());
-        }
+    let client = reqwest::Client::builder()
+        .user_agent("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+        .timeout(std::time::Duration::from_secs(15))
+        .build()
+        .ok()?;
+    let response = client
+        .get("https://store.steampowered.com/search/suggest")
+        .query(&[("term", term), ("f", "games"), ("cc", "US"), ("l", "english")])
+        .send()
+        .await
+        .ok()?;
+    if !response.status().is_success() {
+        return None;
     }
-    for app in apps {
-        let name = app.get("name").and_then(|n| n.as_str()).unwrap_or("");
-        if name.to_lowercase().contains(&term) {
-            return app.get("appid").map(|id| id.to_string());
+    let html = response.text().await.ok()?;
+    if let Some(idx) = html.find("data-ds-appid=\"") {
+        let rest = &html[idx + 15..];
+        if let Some(end) = rest.find('"') {
+            let id = &rest[..end];
+            if !id.is_empty() && id.chars().all(|c| c.is_ascii_digit()) {
+                return Some(id.to_string());
+            }
         }
     }
     None

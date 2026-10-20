@@ -298,13 +298,18 @@ async function scan() {
 }
 
 function visibleGames() {
-  const query = state.search.trim().toLowerCase();
+  const q = (state.search || '').toLowerCase().trim();
   return state.games
     .filter((game) => game.type === state.tab)
     .filter((game) => state.showUninstalled || game.installed)
-    .filter((game) => !query || game.name.toLowerCase().includes(query))
     .filter((game) => !(state.hideBorked && gameTier(game) === 'borked'))
-    .sort((a, b) => a.name.localeCompare(b.name));
+    .filter((game) => {
+      if (!q) return true;
+      const name = (game.name || '').toLowerCase();
+      const id = String(game.id || '').toLowerCase();
+      return name.indexOf(q) !== -1 || id.indexOf(q) !== -1;
+    })
+    .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
 }
 
 /* ===== Rendering ===== */
@@ -450,7 +455,8 @@ function applyArtworkToCard(game) {
     image.alt = game.name;
     cover.prepend(image);
   }
-  image.src = art;
+  const busted = art.includes('?') ? `${art}&t=${Date.now()}` : `${art}?t=${Date.now()}`;
+  image.src = busted;
 }
 
 function updateRunningUI(gameId) {
@@ -588,7 +594,10 @@ function refreshDetail() {
   const cover = $('#detail-cover');
   const art = imageSrc(game.artwork);
   cover.style.display = art ? 'block' : 'none';
-  if (art) cover.src = art;
+  if (art) {
+    const busted = art.includes('?') ? `${art}&t=${Date.now()}` : `${art}?t=${Date.now()}`;
+    cover.src = busted;
+  }
 
   $('#detail-name').textContent = game.name;
 

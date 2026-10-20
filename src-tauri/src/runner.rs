@@ -60,6 +60,11 @@ pub fn spawn_manual(game: &ManualGame, settings: &HashMap<String, String>) -> Re
     if game.runner_type == "native" {
         let mut command = Command::new(&game.path);
         command.args(&extra);
+        if let Some(parent) = std::path::Path::new(&game.path).parent() {
+            if !parent.as_os_str().is_empty() {
+                command.current_dir(parent);
+            }
+        }
         command.process_group(0);
         return command
             .spawn()
@@ -81,6 +86,11 @@ pub fn spawn_manual(game: &ManualGame, settings: &HashMap<String, String>) -> Re
 
     let mut command = Command::new(&proton_path);
     command.arg("run").arg(&game.path).args(&extra);
+    if let Some(parent) = std::path::Path::new(&game.path).parent() {
+        if !parent.as_os_str().is_empty() {
+            command.current_dir(parent);
+        }
+    }
     command.env(
         "STEAM_COMPAT_CLIENT_INSTALL_PATH",
         paths::home().join(".steam/steam"),
@@ -138,8 +148,7 @@ pub fn find_pid_by_env(key: &str, value: &str, exclude: &[i32]) -> Option<i32> {
     None
 }
 
-pub fn find_pid_heroic(game_id: &str, game_name: &str, exclude: &[i32]) -> Option<i32> {
-    let lower_name = game_name.to_lowercase();
+pub fn find_pid_heroic(game_id: &str, _game_name: &str, exclude: &[i32]) -> Option<i32> {
     let entries = std::fs::read_dir("/proc").ok()?;
     for entry in entries.flatten() {
         let Ok(pid) = entry.file_name().to_string_lossy().parse::<i32>() else {
@@ -156,11 +165,7 @@ pub fn find_pid_heroic(game_id: &str, game_name: &str, exclude: &[i32]) -> Optio
             .map(|part| String::from_utf8_lossy(part).to_string())
             .collect::<Vec<String>>()
             .join(" ");
-        let lower = joined.to_lowercase();
-        if lower.contains("legendary") && joined.contains(game_id) {
-            return Some(pid);
-        }
-        if !lower_name.is_empty() && lower.contains("wine") && lower.contains(&lower_name) {
+        if joined.contains(game_id) {
             return Some(pid);
         }
     }

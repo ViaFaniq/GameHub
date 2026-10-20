@@ -62,7 +62,7 @@ All app data lives in familiar locations:
 
 ## Notes
 
-- The app expects `steam` and `awww`-independent external launchers: Steam titles are
+- The app expects `steam` and `heroic`-independent external launchers: Steam titles are
   started through `steam://rungameid/<appid>`, Heroic titles through
   `heroic://launch/<platform>/<id>`.
 - Playtime for Steam games is synced with the Steam Web API and always keeps the highest
