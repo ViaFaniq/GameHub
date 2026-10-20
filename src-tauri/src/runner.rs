@@ -46,6 +46,28 @@ pub fn split_args(input: &str) -> Vec<String> {
     args
 }
 
+fn steam_runtime_entry() -> Option<std::path::PathBuf> {
+    let home = paths::home();
+    let bases = [
+        home.join(".steam/steam/steamapps/common"),
+        home.join(".local/share/Steam/steamapps/common"),
+        home.join(".var/app/com.valvesoftware.Steam/.local/share/Steam/steamapps/common"),
+    ];
+    for runtime in [
+        "SteamLinuxRuntime_4",
+        "SteamLinuxRuntime_sniper",
+        "SteamLinuxRuntime_soldier",
+    ] {
+        for base in &bases {
+            let entry = base.join(runtime).join("_v2-entry-point");
+            if entry.is_file() {
+                return Some(entry);
+            }
+        }
+    }
+    None
+}
+
 pub fn spawn_manual(game: &ManualGame, settings: &HashMap<String, String>) -> Result<Child, String> {
     let args_text = if game.use_global_args {
         settings
@@ -72,10 +94,20 @@ pub fn spawn_manual(game: &ManualGame, settings: &HashMap<String, String>) -> Re
     }
 
     let proton_path = match game.proton_version.as_ref().filter(|v| !v.trim().is_empty()) {
-        Some(version) => proton::installed_versions()
-            .get(version)
-            .cloned()
-            .ok_or_else(|| format!("Proton version '{}' is not installed", version))?,
+        Some(version) => {
+            let installed = proton::installed_versions();
+            installed.get(version).cloned().ok_or_else(|| {
+                if installed.is_empty() {
+                    format!("Proton version '{}' is not installed. No Proton installed.", version)
+                } else {
+                    format!(
+                        "Proton version '{}' is not installed. Available: {}",
+                        version,
+                        installed.keys().cloned().collect::<Vec<_>>().join(", ")
+                    )
+                }
+            })?
+        }
         None => proton::resolve(settings).ok_or_else(|| {
             "No Proton versions found. Install one in Settings.".to_string()
         })?,
@@ -84,31 +116,63 @@ pub fn spawn_manual(game: &ManualGame, settings: &HashMap<String, String>) -> Re
     let prefix = paths::prefix_dir(&game.id);
     std::fs::create_dir_all(&prefix).map_err(|e| e.to_string())?;
 
-    let mut command = Command::new(&proton_path);
-    command.arg("run").arg(&game.path).args(&extra);
-    if let Some(parent) = std::path::Path::new(&game.path).parent() {
-        if !parent.as_os_str().is_empty() {
-            command.current_dir(parent);
-        }
+    let exe_path = std::path::Path::new(&game.path);
+    let cwd = exe_path.parent().unwrap_or(std::path::Path::new(".")).to_path_buf();
+
+    let mut command = if let Some(entry) = steam_runtime_entry() {
+        let mut command = Command::new(entry);
+        command
+            .arg("--verb=waitforexitandrun")
+            .arg("--")
+            .arg(&proton_path)
+            .arg("waitforexitandrun")
+            .arg(&game.path)
+            .args(&extra);
+        command
+    } else {
+        let mut command = Command::new(&proton_path);
+        command
+            .arg("waitforexitandrun")
+            .arg(&game.path)
+            .args(&extra);
+        command
+    };
+
+    if !cwd.as_os_str().is_empty() {
+        command.current_dir(&cwd);
     }
     command.env(
         "STEAM_COMPAT_CLIENT_INSTALL_PATH",
         paths::home().join(".steam/steam"),
     );
     command.env("STEAM_COMPAT_DATA_PATH", &prefix);
-    if let Some(overrides) = game
+    command.env("PROTON_LOG", "1");
+    if let Some(steam_id) = game
+        .steam_id
+        .as_ref()
+        .filter(|value| !value.trim().is_empty())
+    {
+        command.env("SteamAppId", steam_id);
+        command.env("SteamGameId", steam_id);
+    }
+    // Cracked / non-Steam games ship their own steam_api shim (Goldberg, RUNE, ...).
+    // Wine's lsteamclient bridge conflicts with it and makes such games crash on
+    // startup, so disable it the same way UMU does for non-Steam launches.
+    let existing = std::env::var("WINEDLLOVERRIDES").unwrap_or_default();
+    let mut overrides = if existing.is_empty() {
+        "lsteamclient=d".to_string()
+    } else {
+        format!("{};lsteamclient=d", existing)
+    };
+    if let Some(extra) = game
         .dll_overrides
         .as_ref()
         .filter(|o| !o.trim().is_empty())
     {
-        let existing = std::env::var("WINEDLLOVERRIDES").unwrap_or_default();
-        let merged = if existing.is_empty() {
-            overrides.clone()
-        } else {
-            format!("{};{}", existing, overrides)
-        };
-        command.env("WINEDLLOVERRIDES", merged);
+        overrides.push(';');
+        overrides.push_str(extra);
     }
+    command.env("WINEDLLOVERRIDES", overrides);
 
     command.process_group(0);
     command
