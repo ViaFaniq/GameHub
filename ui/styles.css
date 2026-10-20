@@ -270,8 +270,8 @@ html, body {
 .fab.install { background: #2a5f8f; }
 .fab.install:hover { background: #35739f; }
 
-.card.uninstalled .cover img, .card.uninstalled .cover-placeholder { opacity: 0.55; transition: opacity 0.18s ease; }
-.card.uninstalled:hover .cover img, .card.uninstalled:hover .cover-placeholder { opacity: 1; }
+.card.uninstalled .cover img, .card.uninstalled .cover-placeholder { opacity: 0.55; }
+.card.uninstalled:hover .cover img, .card.uninstalled:hover .cover-placeholder { opacity: 1; transition: opacity 0.18s ease; }
 
 /* ===== Detail panel ===== */
 .detail {
