@@ -949,7 +949,7 @@ dependencies = [
 
 [[package]]
 name = "gamehub"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "dirs 6.0.0",
  "flate2",
