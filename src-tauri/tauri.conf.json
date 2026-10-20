@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "GameHub",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "identifier": "com.github.gamehub",
   "build": {
     "frontendDist": "../ui"
