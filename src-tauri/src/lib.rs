@@ -681,6 +681,12 @@ fn log_launch_error(error: &str) {
     {
         let _ = writeln!(file, "{}", error);
     }
+    let _ = std::process::Command::new("notify-send")
+        .arg("GameHub")
+        .arg(error)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn();
 }
 
 pub fn run() {
